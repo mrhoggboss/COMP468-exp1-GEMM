@@ -81,7 +81,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    float *d_a = nullptr, *d_b = nullptr, *d_c = nullptr;
+    float *d_a = nullptr, *d_b = nullptr, *d_c = nullptr, *d_ref = nullptr;
     /* TODO(student): allocate device buffers and copy host data over. */
     // since check_cuda is provided, we check at every step whether our allocation is successful
     check_cuda(cudaMalloc(&d_a, bytes_a), "cudaMalloc Device d_a");
@@ -125,6 +125,26 @@ int main(int argc, char** argv) {
         check_cublas(cublasCreate(&handle), "cublasCreate");
         const float alpha = 1.0f;
         const float beta = 0.0f;
+
+        // warm up
+        check_cublas(
+            cublasSgemm(handle,
+                        CUBLAS_OP_N,
+                        CUBLAS_OP_N,
+                        n,
+                        m,
+                        k,
+                        &alpha,
+                        d_b,
+                        n,
+                        d_a,
+                        k,
+                        &beta,
+                        d_c,
+                        n),
+            "cublas warmup");
+        check_cuda(cudaDeviceSynchronize(), "warmup");
+
         check_cuda(cudaEventRecord(start), "record start");
         check_cublas(
             cublasSgemm(handle,
@@ -157,7 +177,6 @@ int main(int argc, char** argv) {
         
         // we dont want to verify if cuBLAS was used in the first place. 
         if (opt.impl != "cublas") {
-            float* d_ref = nullptr;
             check_cuda(cudaMalloc(&d_ref, bytes_c), "cudaMalloc Device d_ref");
 
             // make d_ref start with zeros
@@ -214,7 +233,7 @@ int main(int argc, char** argv) {
     check_cuda(cudaFree(d_a), "cudaFree Device d_a");
     check_cuda(cudaFree(d_b), "cudaFree Device d_b");
     check_cuda(cudaFree(d_c), "cudaFree Device d_c");
-    check_cuda(cudaFree(d_ref), "cudaFree Device d_ref");
+    if (d_ref) check_cuda(cudaFree(d_ref), "cudaFree Device d_ref");
     check_cuda(cudaEventDestroy(start), "cudaEventDestroy start event");
     check_cuda(cudaEventDestroy(stop), "cudaEventDestroy stop event");
     return 0;
